@@ -1,6 +1,8 @@
 import 'package:attendance_app/ui/absent/absent_screen.dart';
-import 'package:attendance_app/ui/attend/attend_screen.dart';
+import 'package:attendance_app/ui/admin/admin_gate.dart';
+import 'package:attendance_app/ui/attend/camera_screen.dart';
 import 'package:attendance_app/ui/attendance_history/attendance_history_screen.dart';
+import 'package:attendance_app/ui/students/student_list_screen.dart';
 import 'package:flutter/material.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -40,13 +42,13 @@ class HomeScreen extends StatelessWidget {
                   children: [
                     _HomeMenuCard(
                       title: "Attendance Record",
-                      subtitle: "Take selfie photo and record your attendance",
+                      subtitle: "Wajah Anda dikenali otomatis, tanpa isi nama",
                       imagePath: 'assets/images/ic_absen.png',
                       onTap: () {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => const AttendScreen(),
+                            builder: (context) => const CameraScreen(),
                           ),
                         );
                       },
@@ -76,6 +78,27 @@ class HomeScreen extends StatelessWidget {
                           MaterialPageRoute(
                             builder: (context) =>
                                 const AttendanceHistoryScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    _HomeMenuCard(
+                      title: "Data Wajah Siswa",
+                      subtitle: "Khusus guru — perlu PIN admin",
+                      imagePath: 'assets/images/ic_student.png',
+                      trailingIcon: Icons.lock_outline,
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            // Pendaftaran dan penghapusan wajah dikunci, karena
+                            // siapa pun yang bisa mendaftarkan wajah bisa
+                            // mengabsenkan dirinya sebagai orang lain.
+                            builder: (context) => const AdminGate(
+                              title: "Data Wajah Siswa",
+                              child: StudentListScreen(),
+                            ),
                           ),
                         );
                       },
@@ -110,11 +133,16 @@ class _HomeMenuCard extends StatelessWidget {
   final String imagePath;
   final VoidCallback onTap;
 
+  /// Ikon di ujung kanan kartu. Menu yang terkunci memakai gembok supaya
+  /// terlihat sebelum diketuk, bukan baru ketahuan setelah PIN diminta.
+  final IconData trailingIcon;
+
   const _HomeMenuCard({
     required this.title,
     required this.subtitle,
     required this.imagePath,
     required this.onTap,
+    this.trailingIcon = Icons.arrow_forward_ios,
   });
 
   @override
@@ -163,11 +191,7 @@ class _HomeMenuCard extends StatelessWidget {
                   ],
                 ),
               ),
-              const Icon(
-                Icons.arrow_forward_ios,
-                size: 16,
-                color: Colors.grey,
-              ),
+              Icon(trailingIcon, size: 16, color: Colors.grey),
             ],
           ),
         ),

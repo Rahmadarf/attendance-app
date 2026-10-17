@@ -1,9 +1,8 @@
-import 'dart:io';
+import 'dart:typed_data';
 
-import 'package:attendance_app/ui/attend/camera_screen.dart';
+import 'package:attendance_app/models/student.dart';
 import 'package:attendance_app/ui/home_screen.dart';
 import 'package:attendance_app/utils/attendance_status.dart';
-import 'package:camera/camera.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:dotted_border/dotted_border.dart';
 import 'package:flutter/material.dart';
@@ -11,13 +10,34 @@ import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
 
-/// Form konfirmasi presensi: menampilkan selfie hasil verifikasi wajah,
-/// mengambil koordinat GPS beserta alamatnya, menentukan status kehadiran
-/// berdasarkan jam, lalu mengirim dokumen ke Cloud Firestore.
+/// Layar konfirmasi presensi.
+///
+/// Identitas sudah ditentukan oleh pengenalan wajah di `CameraScreen`, jadi di
+/// sini tidak ada input nama sama sekali. Tugas layar ini hanya mengambil
+/// lokasi, menampilkan apa yang akan disimpan, lalu mengirimnya ke Firestore.
 class AttendScreen extends StatefulWidget {
-  final XFile? image;
+  /// Siswa hasil pengenalan wajah.
+  final Student student;
 
-  const AttendScreen({super.key, this.image});
+  /// Skor kemiripan wajah, ditampilkan sebagai bukti dan bahan penyetelan
+  /// ambang batas.
+  final double similarity;
+
+  /// Potongan wajah yang baru dipindai, dipakai sebagai pratinjau.
+  final Uint8List? faceThumbnail;
+
+  /// True bila identitas dipilih manual di mode simulasi, bukan hasil
+  /// pengenalan wajah. Ditandai di UI maupun di dokumen Firestore agar data
+  /// hasil pengujian tidak tertukar dengan presensi sungguhan.
+  final bool isSimulation;
+
+  const AttendScreen({
+    super.key,
+    required this.student,
+    required this.similarity,
+    this.faceThumbnail,
+    this.isSimulation = false,
+  });
 
   @override
   State<AttendScreen> createState() => _AttendScreenState();
@@ -26,8 +46,6 @@ class AttendScreen extends StatefulWidget {
 class _AttendScreenState extends State<AttendScreen> {
   final CollectionReference dataCollection =
       FirebaseFirestore.instance.collection('attendance');
-
-  final TextEditingController nameController = TextEditingController();
 
   double dLat = 0.0;
   double dLong = 0.0;
@@ -42,15 +60,7 @@ class _AttendScreenState extends State<AttendScreen> {
     super.initState();
     setStatusAbsen();
     strDateTime = DateFormat('dd/MM/yyyy HH:mm:ss').format(DateTime.now());
-    if (widget.image != null) {
-      getGeoLocationPosition();
-    }
-  }
-
-  @override
-  void dispose() {
-    nameController.dispose();
-    super.dispose();
+    getGeoLocationPosition();
   }
 
   // Step 11 — aturan waktu kehadiran otomatis.
@@ -142,19 +152,24 @@ class _AttendScreenState extends State<AttendScreen> {
   }
 
   // Step 11 — pengiriman payload ke Cloud Firestore.
-  Future<void> submitAbsen(String alamat, String nama, String status) async {
+  Future<void> submitAbsen() async {
     setState(() => isSubmitting = true);
     _showLoaderDialog();
 
     try {
       await dataCollection.add({
-        'name': nama.trim(),
-        'address': alamat.isEmpty ? 'Lokasi tidak terekam' : alamat,
-        'description': status,
+        // Nama berasal dari dokumen siswa yang cocok, bukan dari keyboard.
+        'name': widget.student.name,
+        'nis': widget.student.nis,
+        'student_id': widget.student.id,
+        'address': strAlamat.isEmpty ? 'Lokasi tidak terekam' : strAlamat,
+        'description': strStatus,
         'datetime': strDateTime,
         'latitude': dLat,
         'longitude': dLong,
+        'face_similarity': widget.similarity,
         'type': 'attendance',
+        if (widget.isSimulation) 'is_simulation': true,
         'created_at': FieldValue.serverTimestamp(),
       });
 
@@ -172,22 +187,6 @@ class _AttendScreenState extends State<AttendScreen> {
       setState(() => isSubmitting = false);
       _showSnackBar("Gagal menyimpan presensi: $e", Icons.error_outline);
     }
-  }
-
-  void _onSubmitPressed() {
-    if (isSubmitting) return;
-    if (nameController.text.trim().isEmpty) {
-      _showSnackBar("Nama wajib diisi.", Icons.warning_amber_rounded);
-      return;
-    }
-    if (widget.image == null) {
-      _showSnackBar(
-        "Ambil selfie terlebih dahulu sebelum mengirim presensi.",
-        Icons.warning_amber_rounded,
-      );
-      return;
-    }
-    submitAbsen(strAlamat, nameController.text, strStatus);
   }
 
   void _showLoaderDialog() {
@@ -225,7 +224,7 @@ class _AttendScreenState extends State<AttendScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Attendance Record")),
+      appBar: AppBar(title: const Text("Konfirmasi Presensi")),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(20),
@@ -233,15 +232,8 @@ class _AttendScreenState extends State<AttendScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Center(child: _buildSelfiePreview()),
-              const SizedBox(height: 24),
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(
-                  labelText: "Nama Lengkap",
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.person_outline),
-                ),
-              ),
+              const SizedBox(height: 20),
+              _buildIdentityCard(),
               const SizedBox(height: 16),
               _buildInfoTile(
                 icon: Icons.access_time,
@@ -268,7 +260,7 @@ class _AttendScreenState extends State<AttendScreen> {
               ),
               const SizedBox(height: 8),
               ElevatedButton.icon(
-                onPressed: isSubmitting ? null : _onSubmitPressed,
+                onPressed: isSubmitting ? null : submitAbsen,
                 icon: const Icon(Icons.send),
                 label: Text(isSubmitting ? "Mengirim..." : "Kirim Presensi"),
                 style: ElevatedButton.styleFrom(
@@ -292,52 +284,89 @@ class _AttendScreenState extends State<AttendScreen> {
       color: Colors.blueAccent,
       strokeWidth: 2,
       child: SizedBox(
-        width: 240,
-        height: 300,
-        child: widget.image == null
-            ? Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(
-                    Icons.face_retouching_natural,
-                    size: 64,
-                    color: Colors.blueAccent,
-                  ),
-                  const SizedBox(height: 12),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 16),
-                    child: Text(
-                      "Verifikasi wajah dulu untuk melanjutkan presensi",
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 12, color: Colors.black54),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const CameraScreen(),
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.camera_alt),
-                    label: const Text("Buka Kamera"),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF1A008F),
-                      foregroundColor: Colors.white,
-                    ),
-                  ),
-                ],
+        width: 180,
+        height: 180,
+        child: widget.faceThumbnail == null
+            ? const Center(
+                child: Icon(
+                  Icons.face_retouching_natural,
+                  size: 64,
+                  color: Colors.blueAccent,
+                ),
               )
             : ClipRRect(
                 borderRadius: BorderRadius.circular(24),
-                child: Image.file(
-                  File(widget.image!.path),
+                child: Image.memory(
+                  widget.faceThumbnail!,
                   fit: BoxFit.cover,
                 ),
               ),
+      ),
+    );
+  }
+
+  /// Identitas hasil pengenalan wajah. Tidak bisa diubah di layar ini — itu
+  /// inti perubahannya: nama datang dari wajah, bukan dari keyboard.
+  Widget _buildIdentityCard() {
+    return Card(
+      elevation: 0,
+      color: const Color(0xFF1A008F).withValues(alpha: 0.06),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            const Icon(
+              Icons.verified_user_outlined,
+              color: Color(0xFF1A008F),
+              size: 32,
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    "Dikenali sebagai",
+                    style: TextStyle(fontSize: 12, color: Colors.black54),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    widget.student.name,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF1A008F),
+                    ),
+                  ),
+                  if (widget.student.nis.isNotEmpty)
+                    Text(
+                      "NIS ${widget.student.nis}",
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Colors.black54,
+                      ),
+                    ),
+                  const SizedBox(height: 4),
+                  Text(
+                    widget.isSimulation
+                        ? "Dipilih manual — mode simulasi"
+                        : "Kemiripan ${(widget.similarity * 100).toStringAsFixed(1)}%",
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: widget.isSimulation
+                          ? Colors.orange.shade900
+                          : Colors.black45,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

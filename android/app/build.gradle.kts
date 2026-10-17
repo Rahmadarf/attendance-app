@@ -19,8 +19,8 @@ android {
         applicationId = "com.kumar.attendance_app"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        // Google ML Kit Face Detection dan package camera butuh minimal API 21.
-        minSdk = maxOf(21, flutter.minSdkVersion)
+        // ML Kit dan camera butuh API 21, tflite_flutter butuh API 26.
+        minSdk = maxOf(26, flutter.minSdkVersion)
         targetSdk = flutter.targetSdkVersion
         // Uses the version code from pubspec.yaml. When using split APKs, 1000 * ABI_VERSION
         // is added automatically by Flutter. (https://developer.android.com/studio/build/configure-apk-splits#configure-APK-versions)

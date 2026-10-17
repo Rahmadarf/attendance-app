@@ -85,14 +85,21 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
                       final description = data['description']?.toString() ?? '-';
                       final datetime = data['datetime']?.toString() ?? '-';
                       final type = data['type']?.toString() ?? 'attendance';
+                      // Dokumen lama, sebelum pengenalan wajah ada, tidak
+                      // punya dua field ini. Keduanya dibaca sebagai opsional.
+                      final nis = data['nis']?.toString() ?? '';
+                      final similarity = data['face_similarity'];
 
                       return _buildAttendanceCard(
-                        docId,
-                        name,
-                        address,
-                        description,
-                        datetime,
-                        type,
+                        docId: docId,
+                        name: name,
+                        nis: nis,
+                        address: address,
+                        description: description,
+                        datetime: datetime,
+                        type: type,
+                        similarity:
+                            similarity is num ? similarity.toDouble() : null,
                       );
                     },
                   );
@@ -185,14 +192,16 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
     }
   }
 
-  Widget _buildAttendanceCard(
-    String docId,
-    String name,
-    String address,
-    String description,
-    String datetime,
-    String type,
-  ) {
+  Widget _buildAttendanceCard({
+    required String docId,
+    required String name,
+    required String nis,
+    required String address,
+    required String description,
+    required String datetime,
+    required String type,
+    required double? similarity,
+  }) {
     final statusColor = _getStatusColor(description);
 
     return Card(
@@ -246,24 +255,56 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: statusColor.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      description,
-                      style: TextStyle(
+                  if (nis.isNotEmpty)
+                    Text(
+                      "NIS $nis",
+                      style: const TextStyle(
                         fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: statusColor,
+                        color: Colors.black54,
                       ),
                     ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: statusColor.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          description,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: statusColor,
+                          ),
+                        ),
+                      ),
+                      if (similarity != null) ...[
+                        const SizedBox(width: 8),
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.face_outlined,
+                              size: 12,
+                              color: Colors.black45,
+                            ),
+                            const SizedBox(width: 2),
+                            Text(
+                              "${(similarity * 100).toStringAsFixed(0)}%",
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: Colors.black45,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
                   ),
                   const SizedBox(height: 6),
                   Row(
@@ -346,7 +387,6 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
     String description,
     String datetime,
   ) async {
-    final nameController = TextEditingController(text: name);
     final addressController = TextEditingController(text: address);
     final descriptionController = TextEditingController(text: description);
     final datetimeController = TextEditingController(text: datetime);
@@ -358,10 +398,20 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(labelText: "Nama"),
+              // Nama sengaja tidak bisa diubah. Nilainya berasal dari
+              // pengenalan wajah dan terikat ke `student_id`; mengizinkan
+              // pengeditan bebas akan membuat dokumen presensi menunjuk ke
+              // siswa yang berbeda dari namanya.
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.lock_outline, size: 20),
+                title: Text(name),
+                subtitle: const Text(
+                  "Nama berasal dari pengenalan wajah dan tidak bisa diubah",
+                  style: TextStyle(fontSize: 11),
+                ),
               ),
               TextField(
                 controller: addressController,
@@ -385,9 +435,7 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
           ),
           ElevatedButton(
             onPressed: () async {
-              if (nameController.text.trim().isEmpty) return;
               await dataCollection.doc(docId).update({
-                'name': nameController.text.trim(),
                 'address': addressController.text.trim(),
                 'description': descriptionController.text.trim(),
                 'datetime': datetimeController.text.trim(),
@@ -400,7 +448,6 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
       ),
     );
 
-    nameController.dispose();
     addressController.dispose();
     descriptionController.dispose();
     datetimeController.dispose();
