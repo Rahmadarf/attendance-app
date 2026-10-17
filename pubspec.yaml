@@ -1,0 +1,37 @@
+name: attendance_app
+description: "Smart Attendance App — presensi dengan Face Detection AI, GPS geocoding, dan Cloud Firestore."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.13.5
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+  dotted_border: ^2.1.0                 # Bingkai putus-putus untuk preview selfie
+  camera: ^0.11.0+2                     # Akses hardware kamera depan
+  geolocator: ^13.0.2                   # Akses koordinat GPS realtime
+  geocoding: ^3.0.0                     # Konversi koordinat lat/long ke nama alamat
+  intl: ^0.20.1                         # Format tanggal & waktu lokal
+  lottie: ^3.3.1                        # Render animasi vektor JSON
+  google_mlkit_face_detection: ^0.12.0  # AI deteksi wajah Google ML Kit
+  cloud_firestore: ^5.6.3               # Database NoSQL realtime Firebase
+  firebase_core: ^3.11.0                # Core SDK Firebase
+  image_picker: ^1.1.2                  # Pengambilan gambar pendukung
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/
+    - assets/raw/
