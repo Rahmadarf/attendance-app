@@ -17,4 +17,22 @@ class Vision {
           ),
     );
   }
+
+  /// Detektor terpisah untuk uji keaktifan wajah, yang memeriksa puluhan frame
+  /// per detik dari stream kamera.
+  ///
+  /// Mode `fast` dipilih karena di sini yang dibutuhkan hanya peluang mata
+  /// terbuka dan sudut kepala, bukan presisi posisi wajah. Mode `accurate`
+  /// terlalu berat untuk dijalankan tiap frame dan membuat preview tersendat.
+  /// Landmark dimatikan dengan alasan yang sama.
+  FaceDetector livenessDetector() {
+    return FaceDetector(
+      options: FaceDetectorOptions(
+        enableClassification: true,
+        enableLandmarks: false,
+        performanceMode: FaceDetectorMode.fast,
+        minFaceSize: 0.15,
+      ),
+    );
+  }
 }
